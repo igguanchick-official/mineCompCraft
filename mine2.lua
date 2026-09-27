@@ -11,15 +11,23 @@ end
 
 local MIN_FUEL = 100 
 
--- Automatic refuel function
+term.clear()
+term.setCursorPos(1, 1)
+print("=== 2-WAY TUNNEL SYSTEM ===")
+print("Target length per lane: " .. length)
+print("----------------------------")
+
+local statusLine = 4
+
 local function checkAndRefuel()
     if turtle.getFuelLevel() >= MIN_FUEL then return true end
-    print("Low fuel. Searching for coal...")
+    term.setCursorPos(1, statusLine + 1)
+    term.clearLine()
+    write("Status: Searching for coal...")
     for slot = 1, 16 do
         turtle.select(slot)
         if turtle.refuel(0) then
             turtle.refuel()
-            print("Refueled! Current fuel: " .. turtle.getFuelLevel())
             if turtle.getFuelLevel() >= MIN_FUEL then
                 turtle.select(1)
                 return true
@@ -30,7 +38,6 @@ local function checkAndRefuel()
     return turtle.getFuelLevel() > 0
 end
 
--- Check inventory space
 local function isInventoryFull()
     for i = 1, 16 do
         if turtle.getItemCount(i) == 0 then return false end
@@ -38,71 +45,56 @@ local function isInventoryFull()
     return true
 end
 
--- Digging single step function (forward, up, down)
 local function digStep()
-    while turtle.detect() do
-        turtle.dig()
-        sleep(0.5)
-    end
-    if not turtle.forward() then
-        return false
-    end
-    while turtle.detectUp() do
-        turtle.digUp()
-        sleep(0.5)
-    end
-    if turtle.detectDown() then
-        turtle.digDown()
-    end
+    while turtle.detect() do turtle.dig() sleep(0.5) end
+    if not turtle.forward() then return false end
+    while turtle.detectUp() do turtle.digUp() sleep(0.5) end
+    if turtle.detectDown() then turtle.digDown() end
     return true
 end
 
--- --- MAIN LOGIC ---
-
--- Way there (First tunnel line)
-print("\n[1/2] Digging forward...")
+-- Way there
 for i = 1, length do
-    if not checkAndRefuel() then print("CRITICAL ERROR: Out of fuel!") return end
-    if isInventoryFull() then print("Error: Inventory is full!") return end
-    
-    if not digStep() then
-        print("Error: Path blocked on forward way.")
-        break
+    if not checkAndRefuel() or isInventoryFull() or not digStep() then
+        term.setCursorPos(1, statusLine + 1)
+        print("Error occurred on forward path!")
+        return
     end
-    print("Forward path: " .. i .. "/" .. length)
+    
+    -- Обновление строки пути ТУДА
+    term.setCursorPos(1, statusLine)
+    term.clearLine()
+    write("Lane 1/2: " .. i .. "/" .. length .. " | Fuel: " .. turtle.getFuelLevel())
 end
 
--- Turn right, move 1 block, turn right
-print("\nTurning around to the right...")
+-- Turning around
+term.setCursorPos(1, statusLine + 1)
+term.clearLine()
+write("Status: Switching lanes...")
+
 turtle.turnRight()
-
--- Clear the block to the side and step into the next lane
-while turtle.detect() do
-    turtle.dig()
-    sleep(0.5)
-end
-if not turtle.forward() then
-    print("Error: Cannot switch lanes. Blocked.")
-    return
-end
-
--- Clear top/bottom at the pivot point
+while turtle.detect() do turtle.dig() sleep(0.5) end
+if not turtle.forward() then return end
 while turtle.detectUp() do turtle.digUp() sleep(0.5) end
 if turtle.detectDown() then turtle.digDown() end
-
 turtle.turnRight()
 
--- Way back (Second tunnel line)
-print("\n[2/2] Digging back to base...")
+term.setCursorPos(1, statusLine + 1)
+term.clearLine()
+
+-- Way back
 for i = 1, length do
-    if not checkAndRefuel() then print("CRITICAL ERROR: Out of fuel!") return end
-    if isInventoryFull() then print("Error: Inventory is full!") return end
-    
-    if not digStep() then
-        print("Error: Path blocked on way back.")
-        break
+    if not checkAndRefuel() or isInventoryFull() or not digStep() then
+        term.setCursorPos(1, statusLine + 1)
+        print("Error occurred on return path!")
+        return
     end
-    print("Return path: " .. i .. "/" .. length)
+    
+    -- Обновление строки пути ОБРАТНО
+    term.setCursorPos(1, statusLine)
+    term.clearLine()
+    write("Lane 2/2: " .. i .. "/" .. length .. " | Fuel: " .. turtle.getFuelLevel())
 end
 
-print("\nJob completed! Returned to base line.")
+term.setCursorPos(1, statusLine + 2)
+print("Job completed! Back to base.")
