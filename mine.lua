@@ -4,89 +4,84 @@ write("Enter number: ")
 local input = read()
 local length = tonumber(input)
 
--- Check for correct input
 if not length or length <= 0 then
     print("Error: Please enter a valid number greater than 0!")
     return
 end
 
--- Minimum fuel level before refuel triggers
 local MIN_FUEL = 100 
 
-print("\nStarting tunnel digging, length: " .. length .. "...")
+-- Очищаем экран перед началом работы для идеальной чистоты
+term.clear()
+term.setCursorPos(1, 1)
+print("=== TUNNEL MINING SYSTEM ===")
+print("Target length: " .. length)
+print("----------------------------")
 
--- Automatic refuel function
+-- Запоминаем строчку, на которой будем обновлять статус
+local statusLine = 4
+
 local function checkAndRefuel()
-    if turtle.getFuelLevel() >= MIN_FUEL then
-        return true
-    end
-
-    print("Low fuel. Searching for coal...")
+    if turtle.getFuelLevel() >= MIN_FUEL then return true end
+    
+    -- Выводим предупреждение на отдельной строке ниже
+    term.setCursorPos(1, statusLine + 1)
+    term.clearLine()
+    write("Status: Low fuel. Searching for coal...")
     
     for slot = 1, 16 do
         turtle.select(slot)
-        if turtle.refuel(0) then -- Check if item is fuel
-            turtle.refuel()     -- Consume the whole stack
-            print("Refueled! Current fuel: " .. turtle.getFuelLevel())
-            
+        if turtle.refuel(0) then
+            turtle.refuel()
+            term.setCursorPos(1, statusLine + 1)
+            term.clearLine()
+            write("Status: Refueled! Fuel: " .. turtle.getFuelLevel())
+            sleep(1) -- даем секунду прочесть сообщение
             if turtle.getFuelLevel() >= MIN_FUEL then
                 turtle.select(1)
                 return true
             end
         end
     end
-    
     turtle.select(1)
     return turtle.getFuelLevel() > 0
 end
 
--- Check if inventory is full function
 local function isInventoryFull()
     for i = 1, 16 do
-        if turtle.getItemCount(i) == 0 then
-            return false
-        end
+        if turtle.getItemCount(i) == 0 then return false end
     end
     return true
 end
 
--- Main movement and digging loop
 for i = 1, length do
-    -- 1. Check and replenish fuel
-    if not checkAndRefuel() then
-        print("CRITICAL ERROR: Out of fuel!")
-        break
-    end
-
-    -- 2. Check inventory space
-    if isInventoryFull() then
-        print("Error: Inventory is full!")
-        break
-    end
-
-    -- 3. Clear path in front and step forward (Middle layer)
-    while turtle.detect() do
-        turtle.dig()
-        sleep(0.5) -- Wait for gravel/sand to fall
+    if not checkAndRefuel() then 
+        term.setCursorPos(1, statusLine + 1)
+        print("CRITICAL ERROR: Out of fuel!") 
+        break 
     end
     
-    if not turtle.forward() then
-        print("Error: Path blocked. Cannot move forward.")
-        break
+    if isInventoryFull() then 
+        term.setCursorPos(1, statusLine + 1)
+        print("Error: Inventory is full!") 
+        break 
     end
 
-    -- 4. Dig the upper block (Ceiling)
-    while turtle.detectUp() do
-        turtle.digUp()
-        sleep(0.5) -- Wait if gravel falls from above
+    while turtle.detect() do turtle.dig() sleep(0.5) end
+    if not turtle.forward() then 
+        term.setCursorPos(1, statusLine + 1)
+        print("Error: Path blocked!") 
+        break 
     end
+    
+    while turtle.detectUp() do turtle.digUp() sleep(0.5) end
+    if turtle.detectDown() then turtle.digDown() end
 
-    -- 5. Dig the lower block (Floor)
-    if turtle.detectDown() then
-        turtle.digDown()
-    end
-
-    print("Blocks mined: " .. i .. "/" .. length)
+    -- ЭТА ЧАСТЬ ОБНОВЛЯЕТ СТРОКУ НА ОДНОМ МЕСТЕ
+    term.setCursorPos(1, statusLine)
+    term.clearLine() -- Стирает старый текст в этой строке
+    write("Progress: " .. i .. "/" .. length .. " | Fuel: " .. turtle.getFuelLevel())
 end
 
+term.setCursorPos(1, statusLine + 2)
 print("Job completed!")
