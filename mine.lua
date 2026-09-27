@@ -1,4 +1,3 @@
--- Request tunnel length from the user
 print("How many blocks to dig?")
 write("Enter number: ")
 local input = read()
@@ -11,20 +10,17 @@ end
 
 local MIN_FUEL = 100 
 
--- Очищаем экран перед началом работы для идеальной чистоты
 term.clear()
 term.setCursorPos(1, 1)
 print("=== TUNNEL MINING SYSTEM ===")
 print("Target length: " .. length)
 print("----------------------------")
 
--- Запоминаем строчку, на которой будем обновлять статус
 local statusLine = 4
 
 local function checkAndRefuel()
     if turtle.getFuelLevel() >= MIN_FUEL then return true end
     
-    -- Выводим предупреждение на отдельной строке ниже
     term.setCursorPos(1, statusLine + 1)
     term.clearLine()
     write("Status: Low fuel. Searching for coal...")
@@ -32,11 +28,11 @@ local function checkAndRefuel()
     for slot = 1, 16 do
         turtle.select(slot)
         if turtle.refuel(0) then
-            turtle.refuel()
+            turtle.refuel(5) -- Берёт строго по 5 штук из стака
             term.setCursorPos(1, statusLine + 1)
             term.clearLine()
             write("Status: Refueled! Fuel: " .. turtle.getFuelLevel())
-            sleep(1) -- даем секунду прочесть сообщение
+            sleep(0.5)
             if turtle.getFuelLevel() >= MIN_FUEL then
                 turtle.select(1)
                 return true
@@ -77,9 +73,8 @@ for i = 1, length do
     while turtle.detectUp() do turtle.digUp() sleep(0.5) end
     if turtle.detectDown() then turtle.digDown() end
 
-    -- ЭТА ЧАСТЬ ОБНОВЛЯЕТ СТРОКУ НА ОДНОМ МЕСТЕ
     term.setCursorPos(1, statusLine)
-    term.clearLine() -- Стирает старый текст в этой строке
+    term.clearLine()
     write("Progress: " .. i .. "/" .. length .. " | Fuel: " .. turtle.getFuelLevel())
 end
 
