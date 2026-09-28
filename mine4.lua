@@ -18,13 +18,23 @@ if not depth or depth <= 0 or not width or width <= 0 or not length or length <=
 end
 
 local MIN_FUEL = 100 
+-- Trash list for auto-drop (including Nether blocks)
 local trashItems = {
     ["minecraft:cobblestone"] = true, ["minecraft:stone"] = true,
     ["minecraft:dirt"] = true, ["minecraft:gravel"] = true,
     ["minecraft:andesite"] = true, ["minecraft:diorite"] = true,
     ["minecraft:granite"] = true, ["minecraft:deepslate"] = true,
-    ["minecraft:cobbled_deepslate"] = true, ["minecraft:tuff"] = true
+    ["minecraft:cobbled_deepslate"] = true, ["minecraft:tuff"] = true,
+    
+    -- Блоки Нижнего мира (Незера)
+    ["minecraft:netherrack"] = true,        -- Незерак
+    ["minecraft:blackstone"] = true,        -- Чернокамень
+    ["minecraft:basalt"] = true,            -- Базальт
+    ["minecraft:magma_block"] = true,       -- Магма
+    ["minecraft:soul_sand"] = true,         -- Песок душ
+    ["minecraft:soul_soil"] = true          -- Почва душ
 }
+
 
 term.clear()
 term.setCursorPos(1, 1)
