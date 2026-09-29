@@ -32,7 +32,7 @@ local trashItems = {
 
 term.clear()
 term.setCursorPos(1, 1)
-print("=== FIXED SHAFT QUARRY ===")
+print("=== PERFECT SHAFT QUARRY ===")
 print("Area: " .. width .. "x" .. length .. " | Depth: " .. totalDepth)
 print("Safe descent active (Chest protected)")
 print("-----------------------------------")
@@ -103,7 +103,7 @@ local function safeMove()
     elseif curDir == 1 then curX = curX + 1
     elseif curDir == 2 then curY = curY - 1
     elseif curDir == 3 then curX = curX - 1
-    end
+end
     return true
 end
 
@@ -111,17 +111,16 @@ end
 local function digForwardStep()
     if not safeMove() then return false end
     while turtle.detectUp() do turtle.digUp() sleep(0.5) end
-    if turtle.detectDown() then turtle.digDown() end
+    turtle.digDown() -- ПРИНУДИТЕЛЬНО ломаем нижний блок БЕЗ проверок detectDown
     return true
 end
 
--- Спуск под себя с гарантированной расчисткой шахты спуска
+-- Спуск под себя с гарантированной жесткой расчисткой
 local function goDownBlocks(blocks)
     for b = 1, blocks do
-        while turtle.detectDown() do turtle.digDown() sleep(0.5) end
+        turtle.digDown() -- Жестко ломаем породу снизу
         if turtle.down() then
             curZ = curZ - 1
-            -- Расчищаем пространство на новом уровне, чтобы не застревать
             while turtle.detectUp() do turtle.digUp() sleep(0.5) end
         else
             return false
@@ -136,7 +135,13 @@ for layer = 1, totalLayers do
     -- 1. Навигация перед началом слоя
     if layer == 1 then
         -- Первый слой: просто выходим из стартовой шахты на Y = 1 (сундук остается сзади на Y = 0)
-        if not digForwardStep() then
+        -- Используем safeMove + ручную зачистку, чтобы правильно посчитать первый шаг
+        while turtle.detect() do turtle.dig() sleep(0.5) end
+        if turtle.forward() then
+            curY = 1
+            while turtle.detectUp() do turtle.digUp() sleep(0.5) end
+            turtle.digDown() -- Зачищаем пол под ногами первого шага
+        else
             print("Error exiting start shaft.")
             break
         end
@@ -162,7 +167,7 @@ for layer = 1, totalLayers do
             
             term.setCursorPos(1, statusLine)
             term.clearLine()
-            write("Layer: " .. layer .. "/" .. totalLayers .. " | Lane: " .. lane .. "/" .. width)
+            write("Layer:" .. layer .. "/" .. totalLayers .. " | Lane:" .. lane .. "/" .. width .. " | Fuel:" .. turtle.getFuelLevel())
         end
 
         if lane < width then
@@ -261,5 +266,4 @@ term.clear()
 term.setCursorPos(1, 1)
 print("=== FIXED MISSION COMPLETED ===")
 print("Quarry cleared. Alignment and layer heights fixed!")
-print("Fuel left: " .. turtle.getFuelLevel())
-
+print("Final Fuel: " .. turtle.getFuelLevel())
