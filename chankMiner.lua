@@ -89,10 +89,15 @@ local function isInventoryFull()
     return true
 end
 
--- Шаг вперед с обновлением виртуального компаса
-local function stepForward()
-    while turtle.detect() do turtle.dig() sleep(0.5) end
-    if not turtle.forward() then return false end
+-- Безопасный шаг вперед (с расчисткой завалов гравия)
+local function safeMove()
+    while turtle.detect() do 
+        turtle.dig() 
+        sleep(0.5) 
+    end
+    if not turtle.forward() then 
+        return false 
+    end
     
     if curDir == 0 then curY = curY + 1
     elseif curDir == 1 then curX = curX + 1
@@ -102,20 +107,22 @@ local function stepForward()
     return true
 end
 
--- Шаг копания (вперед, вверх, вниз)
+-- Шаг полноценного копания (вперед, вверх, вниз)
 local function digForwardStep()
-    if not stepForward() then return false end
+    if not safeMove() then return false end
     while turtle.detectUp() do turtle.digUp() sleep(0.5) end
     if turtle.detectDown() then turtle.digDown() end
     return true
 end
 
--- Спуск под себя
+-- Спуск под себя с гарантированной расчисткой шахты спуска
 local function goDownBlocks(blocks)
     for b = 1, blocks do
         while turtle.detectDown() do turtle.digDown() sleep(0.5) end
         if turtle.down() then
             curZ = curZ - 1
+            -- Расчищаем пространство на новом уровне, чтобы не застревать
+            while turtle.detectUp() do turtle.digUp() sleep(0.5) end
         else
             return false
         end
@@ -183,17 +190,17 @@ for layer = 1, totalLayers do
     while curDir ~= 2 do turnRightTrack() end
     while curY > 1 do
         if not checkAndRefuel() then break end
-        if stepForward() then curY = curY - 1 else break end
+        if not safeMove() then break end
     end
 
     -- Разворачиваемся влево (лицом к X=0)
     while curDir ~= 3 do turnRightTrack() end
     while curX > 0 do
         if not checkAndRefuel() then break end
-        if stepForward() then curX = curX - 1 else break end
+        if not safeMove() then break end
     end
 
-    -- ЖЕСТКИЙ СБРОС НАПРАВЛЕНИЯ: разворачиваемся строго вперед (0) пред следующим слоем
+    -- ЖЕСТКИЙ СБРОС НАПРАВЛЕНИЯ перед следующим слоем
     while curDir ~= 0 do turnRightTrack() end
 end
 
@@ -223,7 +230,7 @@ term.clearLine()
 print("Status: Moving back over the chest...")
 
 while curDir ~= 2 do turnRightTrack() end
-if turtle.forward() then
+if safeMove() then
     curY = 0
 else
     print("Error returning to original shaft node.")
@@ -253,6 +260,6 @@ while curDir ~= 0 do turnRightTrack() end
 term.clear()
 term.setCursorPos(1, 1)
 print("=== FIXED MISSION COMPLETED ===")
-print("Quarry cleared. Layer shift issue fixed!")
+print("Quarry cleared. Alignment and layer heights fixed!")
 print("Fuel left: " .. turtle.getFuelLevel())
 
