@@ -32,20 +32,27 @@ local trashItems = {
 
 term.clear()
 term.setCursorPos(1, 1)
-print("=== SAFE SHAFT QUARRY ===")
+print("=== FIXED SHAFT QUARRY ===")
 print("Area: " .. width .. "x" .. length .. " | Depth: " .. totalDepth)
 print("Safe descent active (Chest protected)")
 print("-----------------------------------")
 local statusLine = 5
 
--- Глобальные координаты. Точка (0,1,0) — это первый блок копания перед шахтой.
-local curX = 0   -- Смещение вправо
-local curY = 0   -- Смещение вперед (0 — это на линии шахты спуска)
-local curZ = 0   -- Смещение вниз
+-- Глобальные координаты. Точка (0,0,0) — это стартовая ячейка над сундуком.
+local curX = 0   
+local curY = 0   
+local curZ = 0   
 local curDir = 0 -- 0: Вперед, 1: Вправо, 2: Назад, 3: Влево
 
-local function turnLeftTrack() turtle.turnLeft() curDir = (curDir - 1) % 4 end
-local function turnRightTrack() turtle.turnRight() curDir = (curDir + 1) % 4 end
+local function turnLeftTrack() 
+    turtle.turnLeft() 
+    curDir = (curDir - 1) % 4
+end
+
+local function turnRightTrack() 
+    turtle.turnRight() 
+    curDir = (curDir + 1) % 4
+end
 
 local function checkAndRefuel()
     if turtle.getFuelLevel() >= MIN_FUEL then return true end
@@ -82,8 +89,8 @@ local function isInventoryFull()
     return true
 end
 
--- Безопасный шаг вперед (разрушает блоки перед, над и под собой)
-local function digForwardStep()
+-- Шаг вперед с обновлением виртуального компаса
+local function stepForward()
     while turtle.detect() do turtle.dig() sleep(0.5) end
     if not turtle.forward() then return false end
     
@@ -92,13 +99,18 @@ local function digForwardStep()
     elseif curDir == 2 then curY = curY - 1
     elseif curDir == 3 then curX = curX - 1
     end
+    return true
+end
 
+-- Шаг копания (вперед, вверх, вниз)
+local function digForwardStep()
+    if not stepForward() then return false end
     while turtle.detectUp() do turtle.digUp() sleep(0.5) end
     if turtle.detectDown() then turtle.digDown() end
     return true
 end
 
--- Спуск на 3 блока вниз (копает под собой, безопасно, так как мы уже вышли из шахты сундука)
+-- Спуск под себя
 local function goDownBlocks(blocks)
     for b = 1, blocks do
         while turtle.detectDown() do turtle.digDown() sleep(0.5) end
@@ -114,31 +126,27 @@ end
 -- --- MAIN QUARRY LOOP ---
 
 for layer = 1, totalLayers do
-    -- 1. Спуск на новый слой происходит только если это НЕ первый слой
-    if layer > 1 then
+    -- 1. Навигация перед началом слоя
+    if layer == 1 then
+        -- Первый слой: просто выходим из стартовой шахты на Y = 1 (сундук остается сзади на Y = 0)
+        if not digForwardStep() then
+            print("Error exiting start shaft.")
+            break
+        end
+    else
+        -- Последующие слои: мы УЖЕ стоим на X=0, Y=1. Спускаемся строго вниз.
         term.setCursorPos(1, statusLine)
         term.clearLine()
         print("Status: Descending to layer " .. layer .. "/" .. totalLayers)
         
-        -- Спускаемся на безопасной вертикали (на 1 блок впереди от сундука)
         if not goDownBlocks(LAYER_HEIGHT) then
             print("CRITICAL ERROR: Path blocked during descent!")
             break
         end
     end
 
-    -- 2. Делаем первый шаг вперед, если мы на 1 слое (выходим из стартовой шахты)
-    if layer == 1 then
-        if not digForwardStep() then
-            print("Error exiting start shaft.")
-            break
-        end
-    end
-
-    -- 3. Выкапываем плоскость змейкой
-    -- Первая дорожка уже укорочена на 1 шаг, так как мы стоим на Y = 1
+    -- 2. Выкапываем плоскость текущего слоя змейкой width x length
     for lane = 1, width do
-        local steps = (lane == 1) and (length - 1) or (length - 1)
         for step = 1, length - 1 do
             if not checkAndRefuel() then return end
             if step % 5 == 0 or isInventoryFull() then clearTrash() end
@@ -166,35 +174,35 @@ for layer = 1, totalLayers do
 
     clearTrash()
 
-    -- 4. Возврат к безопасной оси спуска (X = 0, Y = 1) по воздуху
+    -- 3. ВОЗВРАТ К ДИСТАНЦИОННОЙ ОСИ (X = 0, Y = 1) ПО ВОЗДУХУ
     term.setCursorPos(1, statusLine)
     term.clearLine()
     print("Status: Layer done. Returning to safe line...")
 
+    -- Разворачиваемся назад (лицом к Y=1)
     while curDir ~= 2 do turnRightTrack() end
-    -- Летим назад до координаты Y = 1 (безопасный спуск перед сундуком)
     while curY > 1 do
         if not checkAndRefuel() then break end
-        if digForwardStep() then curY = curY - 1 else break end
+        if stepForward() then curY = curY - 1 else break end
     end
 
+    -- Разворачиваемся влево (лицом к X=0)
     while curDir ~= 3 do turnRightTrack() end
-    -- Летим влево до координаты X = 0
     while curX > 0 do
         if not checkAndRefuel() then break end
-        if digForwardStep() then curX = curX - 1 else break end
+        if stepForward() then curX = curX - 1 else break end
     end
 
-    -- Разворачиваемся лицом вперед (Dir = 0), готовы к следующему безопасному спуску
+    -- ЖЕСТКИЙ СБРОС НАПРАВЛЕНИЯ: разворачиваемся строго вперед (0) пред следующим слоем
     while curDir ~= 0 do turnRightTrack() end
 end
 
--- --- FINAL RETURN TO SHAFT & CHEST ---
+-- --- FINAL RETURN TO SURFACE & UNLOAD ---
 term.setCursorPos(1, statusLine)
 term.clearLine()
 print("Status: Mining done! Climbing up safe line...")
 
--- Поднимаемся по безопасной параллельной шахте до уровня старта (curZ = 0)
+-- Поднимаемся до уровня поверхности (curZ = 0) на безопасной точке Y = 1
 while curZ < 0 do
     if not checkAndRefuel() then break end
     while turtle.detectUp() do turtle.digUp() sleep(0.5) end
@@ -209,21 +217,19 @@ while curZ < 0 do
     end
 end
 
--- Делаем финальный шаг НАЗАД, чтобы зайти обратно в стартовую шахту строго НАД сундуком
+-- Делаем шаг НАЗАД, возвращаясь на исходную точку Y = 0 строго НАД сундуком
 term.setCursorPos(1, statusLine)
 term.clearLine()
 print("Status: Moving back over the chest...")
 
-turtle.turnRight()
-turtle.turnRight()
--- Пятиться назад (на Y = 0) через команду forward, так как мы развернулись
+while curDir ~= 2 do turnRightTrack() end
 if turtle.forward() then
     curY = 0
 else
     print("Error returning to original shaft node.")
 end
 
--- Выгрузка ценностей строго вниз в двойной сундук
+-- Разгрузка в двойной сундук под ногами
 term.setCursorPos(1, statusLine)
 term.clearLine()
 print("Status: Unloading valuables to chest...")
@@ -241,13 +247,12 @@ for slot = 1, 16 do
 end
 turtle.select(1)
 
--- Разворачиваемся обратно лицом к карьеру, как стояли изначально
-turtle.turnRight()
-turtle.turnRight()
+-- Разворачиваемся в начальное положение (лицом к карьеру)
+while curDir ~= 0 do turnRightTrack() end
 
 term.clear()
 term.setCursorPos(1, 1)
-print("=== SAFE MISSION COMPLETED ===")
-print("Quarry cleared. Chest protected successfully!")
+print("=== FIXED MISSION COMPLETED ===")
+print("Quarry cleared. Layer shift issue fixed!")
 print("Fuel left: " .. turtle.getFuelLevel())
 
