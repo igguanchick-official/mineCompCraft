@@ -1,0 +1,98 @@
+-- Request tunnel length from the user
+print("How many blocks to dig forward?")
+write("Enter length: ")
+local input = read()
+local length = tonumber(input)
+
+if not length or length <= 0 then
+    print("Error: Please enter a valid number greater than 0!")
+    return
+end
+
+local MIN_FUEL = 100 
+-- Слот, в котором ОБЯЗАТЕЛЬНО должны лежать строительные блоки (булыжник/незерак)
+local BUILDING_SLOT = 1
+
+term.clear()
+term.setCursorPos(1, 1)
+print("=== BRIDGE TUNNEL SYSTEM ===")
+print("Target length: " .. length)
+print("Please put floor blocks in slot 1!")
+print("----------------------------")
+
+local statusLine = 5
+
+-- Умная функция заправки (игнорирует 1-й слот со строительными блоками)
+local function checkAndRefuel()
+    if turtle.getFuelLevel() >= MIN_FUEL then return true end
+    
+    term.setCursorPos(1, statusLine + 1)
+    term.clearLine()
+    write("Status: Low fuel. Searching for coal...")
+    
+    -- Ищем уголь со 2-го по 16-й слот, чтобы не сожрать стройматериалы из 1-го слота
+    for slot = 2, 16 do
+        turtle.select(slot)
+        if turtle.refuel(0) then
+            turtle.refuel(5) -- Экономно берем по 5 штук
+            if turtle.getFuelLevel() >= MIN_FUEL then
+                turtle.select(BUILDING_SLOT) -- Возвращаемся на строительный слот
+                return true
+            end
+        end
+    end
+    turtle.select(BUILDING_SLOT)
+    return turtle.getFuelLevel() > 0
+end
+
+-- Функция проверки наличия строительных блоков
+local function checkBuildingBlocks()
+    if turtle.getItemCount(BUILDING_SLOT) == 0 then
+        term.setCursorPos(1, statusLine + 1)
+        term.clearLine()
+        print("Warning: Slot 1 is empty! Put more blocks.")
+        -- Ждем, пока игрок положит блоки в 1-й слот
+        while turtle.getItemCount(BUILDING_SLOT) == 0 do
+            sleep(2)
+        end
+    end
+end
+
+-- --- MAIN MINING LOOP ---
+for i = 1, length do
+    -- 1. Проверяем топливо и стройматериалы
+    if not checkAndRefuel() then print("Out of fuel!") break end
+    checkBuildingBlocks()
+
+    -- 2. Расчищаем путь впереди и делаем шаг
+    while turtle.detect() do 
+        turtle.dig() 
+        sleep(0.5) -- Ожидание падения гравия
+    end
+    
+    if not turtle.forward() then 
+        term.setCursorPos(1, statusLine + 1)
+        print("Error: Path blocked!") 
+        break 
+    end
+    
+    -- 3. Копаем блок над собой (потолок)
+    while turtle.detectUp() do 
+        turtle.digUp() 
+        sleep(0.5) 
+    end
+    
+    -- 4. Проверяем пол под собой. Если там пусто — строим мост
+    if not turtle.detectDown() then
+        turtle.select(BUILDING_SLOT)
+        turtle.placeDown()
+    end
+
+    -- Вывод живого прогресса
+    term.setCursorPos(1, statusLine)
+    term.clearLine()
+    write("Progress: " .. i .. "/" .. length .. " | Fuel: " .. turtle.getFuelLevel() .. " | Blocks: " .. turtle.getItemCount(BUILDING_SLOT))
+end
+
+term.setCursorPos(1, statusLine + 2)
+print("Job completed! Tunnel and floor are ready.")
