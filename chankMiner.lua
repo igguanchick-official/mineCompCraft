@@ -1,3 +1,4 @@
+-- Request quarry dimensions from the user
 print("Enter Width (X - lanes to the right):")
 local inputX = read()
 local width = tonumber(inputX)
@@ -31,12 +32,12 @@ local trashItems = {
 
 term.clear()
 term.setCursorPos(1, 1)
-print("=== PERFECT SHAFT QUARRY ===")
+print("=== AUTO-UNLOAD QUARRY ===")
 print("Area: " .. width .. "x" .. length .. " | Depth: " .. totalDepth)
-print("Safe descent active")
 print("-----------------------------------")
 local statusLine = 5
 
+-- Глобальные координаты. Точка (0,0,0) — это стартовая ячейка над сундуком.
 local curX, curY, curZ, curDir = 0, 0, 0, 0
 
 local function turnLeftTrack() turtle.turnLeft() curDir = (curDir - 1) % 4 end
@@ -77,6 +78,7 @@ local function isInventoryFull()
     return true
 end
 
+-- Безопасный шаг вперед
 local function safeMove()
     while turtle.detect() do turtle.dig() sleep(0.5) end
     if not turtle.forward() then return false end
@@ -88,19 +90,20 @@ local function safeMove()
     return true
 end
 
+-- Шаг полноценного копания (вперед, вверх, вниз)
 local function digForwardStep()
     if not safeMove() then return false end
     while turtle.detectUp() do turtle.digUp() sleep(0.5) end
-    turtle.digDown() -- Гарантированно ломаем нижний блок
+    turtle.digDown()
     return true
 end
 
+-- Спуск под себя
 local function goDownBlocks(blocks)
     for b = 1, blocks do
         turtle.digDown()
         if turtle.down() then
             curZ = curZ - 1
-            -- Тотальная зачистка пространства при спуске
             while turtle.detectUp() do turtle.digUp() sleep(0.5) end
             while turtle.detect() do turtle.dig() sleep(0.5) end
         else
@@ -108,6 +111,83 @@ local function goDownBlocks(blocks)
         end
     end
     return true
+end
+
+-- Функция выгрузки ресурсов в сундук на поверхности
+local function unloadToChest()
+    term.setCursorPos(1, statusLine)
+    term.clearLine()
+    print("Status: Unloading to chest...")
+    
+    for slot = 1, 16 do
+        if turtle.getItemCount(slot) > 0 then
+            turtle.select(slot)
+            while not turtle.dropDown() do
+                term.setCursorPos(1, statusLine + 1)
+                term.clearLine()
+                print("Warning: Storage chest full!")
+                sleep(5)
+            end
+        end
+    end
+    turtle.select(1)
+end
+
+-- Функция экстренного возврата на базу и возвращения обратно к точке копания
+local function emergencyUnload()
+    -- Запоминаем текущую рабочую позицию
+    local savedX, savedY, savedZ, savedDir = curX, curY, curZ, curDir
+    
+    term.setCursorPos(1, statusLine + 1)
+    term.clearLine()
+    print("Status: Inv full! Going to unload...")
+
+    -- 1. Летим назад к безопасной вертикали (X=0, Y=1)
+    while curDir ~= 2 do turnRightTrack() end
+    while curY > 1 do if safeMove() == false then break end end
+    
+    while curDir ~= 3 do turnRightTrack() end
+    while curX > 0 do if safeMove() == false then break end end
+
+    -- 2. Поднимаемся на поверхность (curZ = 0)
+    while curZ < 0 do
+        while turtle.detectUp() do turtle.digUp() sleep(0.5) end
+        if turtle.up() then curZ = curZ + 1 else break end
+    end
+
+    -- 3. Шаг назад (Y=0) строго НАД сундук и выгрузка
+    while curDir ~= 2 do turnRightTrack() end
+    if safeMove() then curY = 0 end
+    unloadToChest()
+
+    -- 4. ВОЗВРАЩАЕМСЯ ОБРАТНО НА РАБОЧУЮ ТОЧКУ
+    term.setCursorPos(1, statusLine + 1)
+    term.clearLine()
+    print("Status: Returning to work site...")
+    
+    -- Выходим обратно на Y=1
+    while curDir ~= 0 do turnRightTrack() end
+    if safeMove() then curY = 1 end
+
+    -- Спускаемся обратно на нужный этаж
+    while curZ > savedZ do
+        turtle.digDown()
+        if turtle.down() then curZ = curZ - 1 else break end
+    end
+
+    -- Летим вперед на нужную координату X
+    while curDir ~= 1 do turnRightTrack() end
+    while curX < savedX do if safeMove() == false then break end end
+
+    -- Летим вперед на нужную координату Y
+    while curDir ~= 0 do turnRightTrack() end
+    while curY < savedY do if safeMove() == false then break end end
+
+    -- Восстанавливаем оригинальное направление взгляда черепашки
+    while curDir ~= savedDir do turnRightTrack() end
+    
+    term.setCursorPos(1, statusLine + 1)
+    term.clearLine()
 end
 
 -- --- MAIN QUARRY LOOP ---
@@ -136,10 +216,14 @@ for layer = 1, totalLayers do
         for step = 1, length - 1 do
             if not checkAndRefuel() then return end
             if step % 5 == 0 or isInventoryFull() then clearTrash() end
-            if isInventoryFull() then term.setCursorPos(1, statusLine + 1) print("Error: Inv full!") return end
+            
+            -- ПРОВЕРКА: Если даже после очистки мусора инвентарь забит ценными рудами
+            if isInventoryFull() then
+                emergencyUnload()
+            end
+            
             if not digForwardStep() then term.setCursorPos(1, statusLine + 1) print("Error: Blocked!") return end
             
-            -- КОМПАКТНАЯ СТРОКА (Теперь точно влезет на экран)
             term.setCursorPos(1, statusLine)
             term.clearLine()
             write("L:" .. layer .. "/" .. totalLayers .. " | X:" .. lane .. "/" .. width .. " | F:" .. turtle.getFuelLevel())
@@ -148,10 +232,12 @@ for layer = 1, totalLayers do
         if lane < width then
             if lane % 2 == 1 then
                 turnRightTrack()
+                if isInventoryFull() then emergencyUnload() end
                 if not digForwardStep() then print("Error lane shift.") return end
                 turnRightTrack()
             else
                 turnLeftTrack()
+                if isInventoryFull() then emergencyUnload() end
                 if not digForwardStep() then print("Error lane shift.") return end
                 turnLeftTrack()
             end
@@ -161,7 +247,7 @@ for layer = 1, totalLayers do
 
     clearTrash()
 
-    -- Возврат к оси шахты
+    -- Плановый возврат в конце слоя
     term.setCursorPos(1, statusLine)
     term.clearLine()
     print("Status: Layer done. Returning...")
@@ -181,7 +267,7 @@ for layer = 1, totalLayers do
     while curDir ~= 0 do turnRightTrack() end
 end
 
--- --- RETURN TO SURFACE ---
+-- --- FINAL RETURN TO SURFACE ---
 term.setCursorPos(1, statusLine)
 term.clearLine()
 print("Status: Done! Climbing up...")
@@ -200,36 +286,15 @@ while curZ < 0 do
     end
 end
 
--- Шаг назад над сундук
-term.setCursorPos(1, statusLine)
-term.clearLine()
-print("Status: Backing over chest...")
-
+-- Шаг назад на ось шахты над сундуком
 while curDir ~= 2 do turnRightTrack() end
-if safeMove() then curY = 0 else print("Error returning to shaft node.") end
+if safeMove() then curY = 0 end
 
--- Выгрузка
-term.setCursorPos(1, statusLine)
-term.clearLine()
-print("Status: Unloading to chest...")
-
-for slot = 1, 16 do
-    if turtle.getItemCount(slot) > 0 then
-        turtle.select(slot)
-        while not turtle.dropDown() do
-            term.setCursorPos(1, statusLine + 1)
-            term.clearLine()
-            print("Warning: Chest full!")
-            sleep(5)
-        end
-    end
-end
-turtle.select(1)
+-- Финальная сдача всей добычи
+unloadToChest()
 while curDir ~= 0 do turnRightTrack() end
 
 term.clear()
 term.setCursorPos(1, 1)
-print("=== FIXED MISSION COMPLETED ===")
-print("Quarry cleared. Everything fits!")
-print("Final Fuel: " .. turtle.getFuelLevel())
-
+print("=== MISSION COMPLETED ===")
+print("Quarry cleared. Fuel left: " .. turtle.getFuelLevel())
