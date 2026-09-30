@@ -45,17 +45,6 @@ end
 
 print("Floor reached at " .. blocksDown .. " blocks down.")
 
--- --- 2. ПОДЪЕМ НА 1 БЛОК ВВЕРХ ---
-if blocksDown > 0 then
-    print("Rising 1 block up to mining layer...")
-    if turtle.up() then
-        blocksDown = blocksDown - 1
-    else
-        print("Error: Cannot rise up from the floor!")
-        return
-    end
-end
-
 -- --- 3. ПОЛЕТ ВПЕРЕД В РЕЖИМЕ РАДАРА ---
 print("Searching for target...")
 local stepsForward = 0
